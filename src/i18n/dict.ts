@@ -389,6 +389,13 @@ export const dict = {
     'Data is stored in this browser for now. Take a backup regularly.',
     'البيانات محفوظة في هذا المتصفح حالياً. خذ نسخة احتياطية بانتظام.',
   ],
+  'set.storageNoteDesktop': [
+    'Data is saved on this computer in the file below. Take a backup regularly.',
+    'البيانات محفوظة على هذا الجهاز في الملف أدناه. خذ نسخة احتياطية بانتظام.',
+  ],
+  'set.currency': ['Currency', 'العملة'],
+  'set.dataFile': ['Data file', 'ملف البيانات'],
+  'set.openFolder': ['Open folder', 'فتح المجلد'],
 } as const
 
 export type DictKey = keyof typeof dict

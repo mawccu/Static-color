@@ -6,12 +6,35 @@ estimates, invoices, cash book, reports).
 
 Interface is bilingual, Arabic (RTL) and English, switchable from the sidebar.
 
-## Running it
+It runs as a **Windows desktop app**. No browser, no server, no internet.
+
+## Getting the app
+
+Two builds come out of `npm run dist`, both in `release/`:
+
+| File | What it does |
+|---|---|
+| `StaticColor-portable-<version>.exe` | Single file. Copy it anywhere, double click, it runs. Nothing is installed. |
+| `StaticColor-setup-<version>.exe` | Normal installer with Start menu and desktop shortcuts. |
+
+Windows SmartScreen will warn the first time because the exe is not code
+signed. Click **More info**, then **Run anyway**.
+
+## Building it
 
 ```bash
 npm install
-npm run dev      # http://localhost:5173
-npm run build    # production bundle in dist/
+npm run dist     # both exes into release/
+npm run app      # build and open the desktop app without packaging
+npm run app:dev  # browser dev server on http://localhost:5199, hot reload
+```
+
+If packaging fails with `EPERM ... win-unpacked.tmp`, Windows Defender is
+holding the freshly extracted Electron files. Build with the already unpacked
+copy instead:
+
+```bash
+npx electron-builder --win -c.electronDist=node_modules/electron/dist
 ```
 
 ## What is inside
@@ -62,18 +85,39 @@ npm run build    # production bundle in dist/
 
 ## Data
 
-Everything is stored in the browser under the key `static-color-db-v1`. There is
-no server yet. **Settings has Export and Import buttons, use Export regularly as
-a backup.**
+The desktop app keeps everything in one plain JSON file:
+
+```
+C:\Users\<you>\AppData\Roaming\Static Color\static-color-data.json
+```
+
+Settings shows that path with an **Open folder** button. Writes go to a temp
+file and are then renamed, so a crash mid save cannot corrupt it. Copying that
+one file is a complete backup, and **Settings has Export and Import** which open
+real Windows save and open dialogs.
+
+Run in a browser instead and the same data goes to localStorage under
+`static-color-db-v1`. The app detects which shell it is in and picks the right
+one.
 
 The data layer is deliberately isolated in `src/data/`:
 
 - `types.ts` is the whole domain model
 - `store.ts` handles persistence, seeding and migration
 - `db.tsx` exposes `useDb()` with `add / update / remove / setSettings`
+- `desktop.ts` is the typed bridge to the Electron shell
 
-Swapping localStorage for Supabase or any other backend means rewriting
+Swapping the file store for Supabase or any other backend means rewriting
 `store.ts` and the body of `db.tsx` only. No page needs to change.
+
+## Desktop shell
+
+`electron/main.cjs` creates the window and owns the save, open and reveal
+dialogs. `electron/preload.cjs` exposes a small `window.desktop` API over
+`contextBridge` with `contextIsolation` on and `nodeIntegration` off, so the app
+code never touches Node directly. Only one instance can run at a time, so two
+windows can never fight over the data file. External links open in the real
+browser rather than inside the app.
 
 ## Assumptions worth confirming
 
@@ -100,4 +144,5 @@ actually works:
 
 ## Stack
 
-React 19, TypeScript, Vite, Tailwind CSS v4, React Router. No backend, no auth.
+React 19, TypeScript, Vite, Tailwind CSS v4, React Router, Electron. No backend,
+no auth, no network calls.

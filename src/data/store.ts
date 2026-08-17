@@ -1,4 +1,5 @@
 import type { Collection, DB, Settings } from './types'
+import { desktop } from './desktop'
 
 const KEY = 'static-color-db-v1'
 
@@ -120,9 +121,13 @@ const migrate = (raw: Partial<DB>): DB => {
   }
 }
 
+/**
+ * On the desktop build the data lives in a JSON file the user can copy.
+ * In a browser it falls back to localStorage. Same shape either way.
+ */
 export const loadDB = (): DB => {
   try {
-    const raw = localStorage.getItem(KEY)
+    const raw = desktop()?.read() ?? localStorage.getItem(KEY)
     if (!raw) return emptyDB()
     return migrate(JSON.parse(raw) as Partial<DB>)
   } catch {
@@ -131,8 +136,11 @@ export const loadDB = (): DB => {
 }
 
 export const saveDB = (db: DB): void => {
+  const json = JSON.stringify(db)
   try {
-    localStorage.setItem(KEY, JSON.stringify(db))
+    const bridge = desktop()
+    if (bridge) bridge.write(json)
+    else localStorage.setItem(KEY, json)
   } catch (err) {
     console.error('[static-color] could not save', err)
   }

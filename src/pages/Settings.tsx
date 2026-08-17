@@ -1,5 +1,7 @@
 import { useRef, useState } from 'react'
 import { useDb } from '../data/db'
+import { desktop } from '../data/desktop'
+import { isoDate } from '../data/store'
 import type { DB, Lang } from '../data/types'
 import { useT } from '../i18n'
 import { Card, Field, Grid, Icon, PageHeader, SectionTitle } from '../ui'
@@ -13,32 +15,52 @@ export default function SettingsPage() {
   const [armed, setArmed] = useState(false)
   const [message, setMessage] = useState('')
 
-  const exportData = () => {
-    const blob = new Blob([JSON.stringify(db, null, 2)], {
-      type: 'application/json',
-    })
+  const bridge = desktop()
+
+  const applyJson = (text: string) => {
+    try {
+      const parsed = JSON.parse(text) as DB
+      if (!parsed || typeof parsed !== 'object' || !parsed.settings) {
+        throw new Error('bad file')
+      }
+      replaceAll(parsed)
+      setMessage('OK')
+    } catch {
+      setMessage('ERROR')
+    }
+  }
+
+  const exportData = async () => {
+    const json = JSON.stringify(db, null, 2)
+
+    // desktop build gets a real save dialog instead of a browser download
+    if (bridge) {
+      const saved = await bridge.backup(json)
+      if (saved) setMessage(saved)
+      return
+    }
+
+    const blob = new Blob([json], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `static-color-backup-${new Date().toISOString().slice(0, 10)}.json`
+    a.download = `static-color-backup-${isoDate()}.json`
     a.click()
     URL.revokeObjectURL(url)
   }
 
-  const importData = (file: File) => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      try {
-        const parsed = JSON.parse(String(reader.result)) as DB
-        if (!parsed || typeof parsed !== 'object' || !parsed.settings) {
-          throw new Error('bad file')
-        }
-        replaceAll(parsed)
-        setMessage('OK')
-      } catch {
-        setMessage('ERROR')
-      }
+  const importData = async () => {
+    if (bridge) {
+      const text = await bridge.restore()
+      if (text) applyJson(text)
+      return
     }
+    fileRef.current?.click()
+  }
+
+  const readFile = (file: File) => {
+    const reader = new FileReader()
+    reader.onload = () => applyJson(String(reader.result))
     reader.readAsText(file)
   }
 
@@ -98,7 +120,7 @@ export default function SettingsPage() {
                   <option value="en">English</option>
                 </select>
               </Field>
-              <Field label={t('c.amount')}>
+              <Field label={t('set.currency')}>
                 <input
                   className="input"
                   value={s.currency}
@@ -176,16 +198,17 @@ export default function SettingsPage() {
           </Card>
 
           <Card>
-            <SectionTitle hint={t('set.storageNote')}>{t('set.data')}</SectionTitle>
+            <SectionTitle
+              hint={bridge ? t('set.storageNoteDesktop') : t('set.storageNote')}
+            >
+              {t('set.data')}
+            </SectionTitle>
             <div className="flex flex-wrap gap-2">
               <button className="btn-ghost" onClick={exportData}>
                 <Icon name="download" size={16} />
                 {t('c.export')}
               </button>
-              <button
-                className="btn-ghost"
-                onClick={() => fileRef.current?.click()}
-              >
+              <button className="btn-ghost" onClick={importData}>
                 <Icon name="upload" size={16} />
                 {t('c.import')}
               </button>
@@ -196,7 +219,7 @@ export default function SettingsPage() {
                 className="hidden"
                 onChange={(e) => {
                   const f = e.target.files?.[0]
-                  if (f) importData(f)
+                  if (f) readFile(f)
                   e.target.value = ''
                 }}
               />
@@ -218,7 +241,26 @@ export default function SettingsPage() {
               )}
             </div>
             {message && (
-              <p className="mt-3 text-sm font-semibold text-brand-700">{message}</p>
+              <p className="mt-3 break-all text-sm font-semibold text-brand-700">
+                {message}
+              </p>
+            )}
+
+            {bridge && (
+              <div className="mt-4 rounded-lg bg-ink-50 p-3">
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <p className="label mb-0">{t('set.dataFile')}</p>
+                  <button
+                    className="btn-quiet btn-sm"
+                    onClick={() => bridge.revealDataFile()}
+                  >
+                    {t('set.openFolder')}
+                  </button>
+                </div>
+                <p className="num break-all text-xs text-ink-500" dir="ltr">
+                  {bridge.dataFile}
+                </p>
+              </div>
             )}
             <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-ink-500 sm:grid-cols-3">
               <Count label={t('nav.dyes')} n={db.dyes.length} />

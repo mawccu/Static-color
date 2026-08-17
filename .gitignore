@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# packaged desktop builds, they are attached to GitHub releases instead
+release
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
