@@ -1,0 +1,179 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Cairo', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Consolas', ui-monospace, monospace;
+
+  /* ink: the structural greys */
+  --color-ink-50: #f6f7f9;
+  --color-ink-100: #eceef2;
+  --color-ink-200: #d9dde5;
+  --color-ink-300: #b8bfcc;
+  --color-ink-400: #8b95a8;
+  --color-ink-500: #66718a;
+  --color-ink-600: #4c566d;
+  --color-ink-700: #3a4256;
+  --color-ink-800: #262c3b;
+  --color-ink-900: #171b26;
+  --color-ink-950: #0e1119;
+
+  /* brand: a dye vat teal */
+  --color-brand-50: #edfbf7;
+  --color-brand-100: #d2f5ea;
+  --color-brand-200: #a7ebd8;
+  --color-brand-300: #6edac1;
+  --color-brand-400: #35c1a4;
+  --color-brand-500: #16a68b;
+  --color-brand-600: #0d8571;
+  --color-brand-700: #0e6a5c;
+  --color-brand-800: #10554b;
+  --color-brand-900: #10473f;
+
+  --color-accent-500: #e2703a;
+  --color-accent-600: #c85a26;
+}
+
+:root {
+  --sc-radius: 0.65rem;
+  color-scheme: light;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-ink-100);
+  color: var(--color-ink-900);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Arabic reads better with a touch more line height */
+html[dir='rtl'] body {
+  line-height: 1.75;
+}
+
+/* Tailwind v4 requires custom classes to be utilities before @apply can reuse them. */
+/* min-w-0 lets a card shrink inside a grid or flex track, so a wide table
+   scrolls inside its own .table-wrap instead of stretching the page. */
+@utility card {
+  @apply min-w-0 rounded-xl border border-ink-200 bg-white;
+}
+
+@utility card-pad {
+  @apply p-4 sm:p-5;
+}
+
+@utility label {
+  @apply mb-1.5 block text-xs font-semibold tracking-wide text-ink-500;
+}
+
+@utility input {
+  @apply w-full rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-900
+    outline-none transition placeholder:text-ink-300
+    focus:border-brand-400 focus:ring-2 focus:ring-brand-100
+    disabled:bg-ink-50 disabled:text-ink-400;
+}
+
+@utility btn {
+  @apply inline-flex select-none items-center justify-center gap-2 rounded-lg px-3.5 py-2
+    text-sm font-semibold transition active:scale-[0.98]
+    disabled:pointer-events-none disabled:opacity-50;
+}
+
+@utility btn-primary {
+  @apply btn bg-brand-600 text-white hover:bg-brand-700;
+}
+
+@utility btn-ghost {
+  @apply btn border border-ink-200 bg-white text-ink-700 hover:bg-ink-50;
+}
+
+@utility btn-quiet {
+  @apply btn text-ink-500 hover:bg-ink-100 hover:text-ink-800;
+}
+
+@utility btn-danger {
+  @apply btn bg-red-50 text-red-700 hover:bg-red-100;
+}
+
+@utility btn-sm {
+  @apply px-2.5 py-1.5 text-xs;
+}
+
+@utility chip {
+  @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold;
+}
+
+@utility table-wrap {
+  @apply w-full max-w-full overflow-x-auto;
+}
+
+@utility tbl {
+  @apply w-full min-w-max text-sm;
+}
+
+@utility num {
+  @apply font-mono tabular-nums;
+}
+
+@layer components {
+  select.input {
+    @apply cursor-pointer pe-8;
+  }
+
+  textarea.input {
+    @apply min-h-20 resize-y;
+  }
+
+  .tbl thead th {
+    @apply whitespace-nowrap border-b border-ink-200 bg-ink-50 px-3 py-2.5 text-start
+      text-xs font-semibold uppercase tracking-wide text-ink-500;
+  }
+
+  .tbl tbody td {
+    @apply border-b border-ink-100 px-3 py-2.5 align-middle;
+  }
+
+  .tbl tbody tr:hover {
+    @apply bg-brand-50/40;
+  }
+}
+
+/* keep the Latin figures upright inside RTL text */
+html[dir='rtl'] .num {
+  direction: ltr;
+  display: inline-block;
+  unicode-bidi: embed;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+  }
+  .card {
+    border: none;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-ink-300);
+  border-radius: 99px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-ink-400);
+  background-clip: content-box;
+}
