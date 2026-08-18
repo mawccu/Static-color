@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useDb } from '../data/db'
 import { nextCode, today, uid } from '../data/store'
-import type { Sample, SampleStatus } from '../data/types'
+import type { Basis, Sample, SampleStatus } from '../data/types'
 import { num, useMoney, useT } from '../i18n'
 import {
   Badge,
@@ -19,7 +19,14 @@ import {
   Swatch,
 } from '../ui'
 import { toNum, useEditor } from '../ui/useEditor'
-import { owfGrams, sampleCost, scaleRecipe, sum } from '../lib/calc'
+import {
+  gPerLGrams,
+  mlToL,
+  owfGrams,
+  sampleCost,
+  scaleRecipe,
+  sum,
+} from '../lib/calc'
 
 const statuses: SampleStatus[] = ['draft', 'running', 'done', 'approved', 'rejected']
 
@@ -32,6 +39,54 @@ const statusTone: Record<SampleStatus, 'gray' | 'blue' | 'green' | 'red' | 'ambe
 }
 
 const STEP_COUNT = 14
+
+/**
+ * An optional chemical. Carrier and anti break are both used "when needed"
+ * rather than to a fixed rule, and how they are dosed is not settled yet, so
+ * the basis is a choice on the row instead of an assumption in the code.
+ */
+function ChemRow({
+  label,
+  hint,
+  amount,
+  basis,
+  onAmount,
+  onBasis,
+}: {
+  label: string
+  hint: string
+  amount: number
+  basis: Basis
+  onAmount: (v: number) => void
+  onBasis: (v: Basis) => void
+}) {
+  const { t } = useT()
+  return (
+    <div className="rounded-lg border border-ink-200 p-3">
+      <p className="label mb-2">
+        {label} <span className="font-normal text-ink-400">/ {hint}</span>
+      </p>
+      <div className="flex gap-2">
+        <input
+          type="number"
+          step="0.01"
+          className="input num w-24"
+          value={amount}
+          onChange={(e) => onAmount(toNum(e.target.value))}
+        />
+        <select
+          className="input"
+          value={basis}
+          onChange={(e) => onBasis(e.target.value as Basis)}
+          aria-label={t('smp.basis')}
+        >
+          <option value="gPerL">{t('basis.gPerL')}</option>
+          <option value="owf">{t('basis.owf')}</option>
+        </select>
+      </div>
+    </div>
+  )
+}
 
 export default function Samples() {
   const { db, add, update, remove } = useDb()
@@ -50,13 +105,14 @@ export default function Samples() {
     fabricId: null,
     targetName: '',
     targetHex: '#8b5cf6',
-    fabricWeightG: 10,
+    fabricWeightG: db.settings.sampleFabricG,
     dyes: [],
-    acid: db.settings.defaultAcid,
+    acidGPerL: db.settings.acidGPerL,
     carrier: 0,
+    carrierBasis: 'gPerL',
     antiCrease: 0,
-    waterMl: 200,
-    liquorRatio: 20,
+    antiCreaseBasis: 'gPerL',
+    waterMl: db.settings.sampleWaterMl,
     machineId: db.machines.find((m) => m.kind === 'sample')?.id ?? null,
     tempC: 130,
     timeMin: 45,
@@ -64,6 +120,7 @@ export default function Samples() {
     resultHex: '',
     matched: false,
     stepsDone: [],
+    trials: [],
     repeatOf: null,
     notes: '',
   })
@@ -77,13 +134,17 @@ export default function Samples() {
       .filter((s) => {
         if (!needle) return true
         const client = db.clients.find((c) => c.id === s.clientId)
-        return [s.code, s.targetName, client?.name, client?.nameAr]
+        // searching by the dyes used is how an old recipe actually gets found
+        const dyeNames = s.dyes
+          .map((x) => db.dyes.find((y) => y.id === x.dyeId))
+          .flatMap((y) => (y ? [y.code, y.name, y.nameAr] : []))
+        return [s.code, s.targetName, s.notes, client?.name, client?.nameAr, ...dyeNames]
           .join(' ')
           .toLowerCase()
           .includes(needle)
       })
       .sort((a, b) => b.date.localeCompare(a.date) || b.code.localeCompare(a.code))
-  }, [db.samples, db.clients, q, status])
+  }, [db.samples, db.clients, db.dyes, q, status])
 
   const save = () => {
     if (!ed.draft) return
@@ -103,6 +164,7 @@ export default function Samples() {
       resultHex: '',
       matched: false,
       stepsDone: [],
+      trials: [],
       repeatOf: s.id,
     })
   }
@@ -110,6 +172,32 @@ export default function Samples() {
   /* -------------------------------------------------- recipe helpers */
 
   const d = ed.draft
+
+  /**
+   * A failed sample is adjusted, not replaced, so each go is snapshotted into
+   * the trial log and the sheet above stays live for the next adjustment.
+   */
+  const logTrial = () => {
+    if (!d) return
+    ed.set('trials', [
+      ...d.trials,
+      {
+        n: d.trials.length + 1,
+        date: today(),
+        dyes: d.dyes.map((x) => ({ ...x })),
+        acidGPerL: d.acidGPerL,
+        carrier: d.carrier,
+        antiCrease: d.antiCrease,
+        waterMl: d.waterMl,
+        tempC: d.tempC,
+        timeMin: d.timeMin,
+        resultHex: d.resultHex,
+        matched: d.matched,
+        notes: '',
+      },
+    ])
+  }
+
   const setDyeRow = (i: number, patch: Partial<Sample['dyes'][number]>) => {
     if (!d) return
     const dyes = d.dyes.map((row, ix) => (ix === i ? { ...row, ...patch } : row))
@@ -137,7 +225,21 @@ export default function Samples() {
     )
   }
 
-  const scaled = d ? scaleRecipe(d, batchKg, db) : null
+  const sampleFabric = d ? db.fabrics.find((f) => f.id === d.fabricId) : undefined
+  const litresPerKg = sampleFabric?.litresPerKg || db.settings.litresPerKg
+  const scaled = d ? scaleRecipe(d, batchKg, litresPerKg, db) : null
+
+  /** Picking a fabric pulls its usual temperature, time and carrier need. */
+  const pickFabric = (fabricId: string | null) => {
+    if (!d) return
+    const f = db.fabrics.find((x) => x.id === fabricId)
+    ed.setDraft({
+      ...d,
+      fabricId,
+      tempC: f?.defaultTempC || d.tempC,
+      timeMin: f?.defaultTimeMin || d.timeMin,
+    })
+  }
 
   return (
     <>
@@ -307,7 +409,7 @@ export default function Samples() {
                 <select
                   className="input"
                   value={d.fabricId ?? ''}
-                  onChange={(e) => ed.set('fabricId', e.target.value || null)}
+                  onChange={(e) => pickFabric(e.target.value || null)}
                 >
                   <option value="">{t('c.none')}</option>
                   {db.fabrics.map((f) => (
@@ -486,45 +588,64 @@ export default function Samples() {
             </div>
 
             {/* -------------------------------------------- chemicals */}
-            <Grid cols={4}>
-              <Field label={t('smp.acid')}>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="input num"
-                  value={d.acid}
-                  onChange={(e) => ed.set('acid', toNum(e.target.value))}
-                />
-              </Field>
-              <Field label={`${t('smp.carrier')} (${t('smp.optional')})`}>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="input num"
-                  value={d.carrier}
-                  onChange={(e) => ed.set('carrier', toNum(e.target.value))}
-                />
-              </Field>
-              <Field label={`${t('smp.antiCrease')} (${t('smp.optional')})`}>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="input num"
-                  value={d.antiCrease}
-                  onChange={(e) => ed.set('antiCrease', toNum(e.target.value))}
-                />
-              </Field>
-              <Field label={`${t('smp.water')} (${t('c.ml')})`}>
-                <input
-                  type="number"
-                  className="input num"
-                  value={d.waterMl}
-                  onChange={(e) => ed.set('waterMl', toNum(e.target.value))}
-                />
-              </Field>
-            </Grid>
+            <div>
+              <SectionTitle>{t('smp.chemicals')}</SectionTitle>
 
-            <Grid cols={4}>
+              <Grid cols={2}>
+                <Field label={`${t('smp.water')} (${t('c.ml')})`}>
+                  <input
+                    type="number"
+                    className="input num"
+                    value={d.waterMl}
+                    onChange={(e) => ed.set('waterMl', toNum(e.target.value))}
+                  />
+                </Field>
+                <Field
+                  label={`${t('smp.acid')} (g/L)`}
+                  hint={t('smp.acidHint')}
+                >
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      step="0.1"
+                      className="input num"
+                      value={d.acidGPerL}
+                      onChange={(e) => ed.set('acidGPerL', toNum(e.target.value))}
+                    />
+                    <span className="num shrink-0 rounded-lg bg-brand-50 px-2.5 py-2 text-sm font-semibold text-brand-800">
+                      {num(gPerLGrams(d.acidGPerL, mlToL(d.waterMl)), 3)} g
+                    </span>
+                  </div>
+                </Field>
+              </Grid>
+
+              {sampleFabric?.needsCarrier && d.carrier <= 0 && (
+                <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+                  {t('smp.carrierSuggest')}
+                </p>
+              )}
+
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <ChemRow
+                  label={t('smp.carrier')}
+                  hint={t('smp.carrierHint')}
+                  amount={d.carrier}
+                  basis={d.carrierBasis}
+                  onAmount={(v) => ed.set('carrier', v)}
+                  onBasis={(v) => ed.set('carrierBasis', v)}
+                />
+                <ChemRow
+                  label={t('smp.antiCrease')}
+                  hint={t('smp.antiCreaseHint')}
+                  amount={d.antiCrease}
+                  basis={d.antiCreaseBasis}
+                  onAmount={(v) => ed.set('antiCrease', v)}
+                  onBasis={(v) => ed.set('antiCreaseBasis', v)}
+                />
+              </div>
+            </div>
+
+            <Grid cols={3}>
               <Field label={t('c.machine')}>
                 <select
                   className="input"
@@ -553,14 +674,6 @@ export default function Samples() {
                   className="input num"
                   value={d.timeMin}
                   onChange={(e) => ed.set('timeMin', toNum(e.target.value))}
-                />
-              </Field>
-              <Field label={t('wash.liquorRatio')} hint="1 : X">
-                <input
-                  type="number"
-                  className="input num"
-                  value={d.liquorRatio}
-                  onChange={(e) => ed.set('liquorRatio', toNum(e.target.value))}
                 />
               </Field>
             </Grid>
@@ -600,76 +713,129 @@ export default function Samples() {
               </ol>
             </div>
 
-            {/* ------------------------------------------ scale to bulk */}
+            {/* ------------------------------- take down to the machine */}
             <div className="rounded-xl border border-brand-200 bg-brand-50/50 p-4">
               <SectionTitle hint={t('smp.scaleHint')}>{t('smp.scaleTo')}</SectionTitle>
-              <div className="mb-3 flex items-center gap-2">
-                <input
-                  type="number"
-                  className="input num w-32"
-                  value={batchKg}
-                  onChange={(e) => setBatchKg(toNum(e.target.value))}
-                />
-                <span className="text-sm font-semibold text-ink-600">
-                  {t('c.kg')}
-                </span>
-                <span className="num ms-auto text-xs text-ink-500">
-                  x{num(scaled?.factor ?? 0, 0)}
-                </span>
-              </div>
-              {scaled && scaled.lines.length > 0 ? (
-                <table className="tbl bg-white">
-                  <thead>
-                    <tr>
-                      <th>{t('nav.dyes')}</th>
-                      <th className="text-end">{t('c.g')} (lab)</th>
-                      <th className="text-end">{t('c.g')} (batch)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {scaled.lines.map((l, i) => (
-                      <tr key={i}>
-                        <td>
-                          <div className="flex items-center gap-2">
-                            <Swatch hex={l.hex ?? '#fff'} size={18} />
-                            {l.label}
-                          </div>
-                        </td>
-                        <td className="num text-end">{num(l.lab, 4)}</td>
-                        <td className="num text-end font-semibold">
-                          {num(l.batch, 1)}
-                        </td>
+
+              <Grid cols={3}>
+                <Field label={`${t('smp.batchKg')} (${t('c.kg')})`}>
+                  <input
+                    type="number"
+                    step="0.1"
+                    className="input num"
+                    value={batchKg}
+                    onChange={(e) => setBatchKg(toNum(e.target.value))}
+                  />
+                </Field>
+                <Field
+                  label={t('smp.litresPerKg')}
+                  hint={sampleFabric ? pick(sampleFabric.name, sampleFabric.nameAr) : undefined}
+                >
+                  <input
+                    type="number"
+                    className="input num"
+                    value={litresPerKg}
+                    disabled
+                  />
+                </Field>
+                <Field label={t('smp.totalWater')}>
+                  <div className="num rounded-lg bg-white px-3 py-2 text-sm font-bold text-brand-800">
+                    {num(scaled?.litres ?? 0, 0)} L
+                  </div>
+                </Field>
+              </Grid>
+
+              {scaled && (scaled.dyes.length > 0 || scaled.chemicals.length > 0) ? (
+                <div className="table-wrap mt-3 rounded-lg bg-white">
+                  <table className="tbl">
+                    <thead>
+                      <tr>
+                        <th>{t('smp.recipe')}</th>
+                        <th className="text-end">{t('smp.inBottle')}</th>
+                        <th>{t('smp.how')}</th>
+                        <th className="text-end">{t('smp.inMachine')}</th>
                       </tr>
-                    ))}
-                    <tr className="bg-ink-50 font-semibold">
-                      <td>{t('smp.acid')}</td>
-                      <td className="num text-end">{num(d.acid, 3)}</td>
-                      <td className="num text-end">
-                        {num(d.acid * (scaled.factor || 0), 1)}
-                      </td>
-                    </tr>
-                    {d.carrier > 0 && (
-                      <tr className="bg-ink-50 font-semibold">
-                        <td>{t('smp.carrier')}</td>
-                        <td className="num text-end">{num(d.carrier, 3)}</td>
-                        <td className="num text-end">
-                          {num(d.carrier * (scaled.factor || 0), 1)}
-                        </td>
-                      </tr>
-                    )}
-                    {d.antiCrease > 0 && (
-                      <tr className="bg-ink-50 font-semibold">
-                        <td>{t('smp.antiCrease')}</td>
-                        <td className="num text-end">{num(d.antiCrease, 3)}</td>
-                        <td className="num text-end">
-                          {num(d.antiCrease * (scaled.factor || 0), 1)}
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {scaled.dyes.map((l, i) => (
+                        <tr key={i}>
+                          <td>
+                            <div className="flex items-center gap-2">
+                              <Swatch hex={l.hex ?? '#fff'} size={18} />
+                              {l.label}
+                            </div>
+                          </td>
+                          <td className="num text-end text-ink-500">
+                            {num(l.lab, 4)} g
+                          </td>
+                          <td className="num text-xs text-ink-400">{l.how}</td>
+                          <td className="num text-end font-bold">
+                            {num(l.batch, 1)} g
+                          </td>
+                        </tr>
+                      ))}
+                      {scaled.chemicals.map((l, i) => (
+                        <tr key={`c${i}`} className="bg-ink-50">
+                          <td className="font-semibold">{t(`smp.${l.label}`)}</td>
+                          <td className="num text-end text-ink-500">
+                            {num(l.lab, 3)} g
+                          </td>
+                          <td className="num text-xs text-ink-400">{l.how}</td>
+                          <td className="num text-end font-bold">
+                            {num(l.batch, 1)} g
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               ) : (
-                <p className="text-sm text-ink-400">{t('c.empty')}</p>
+                <p className="mt-3 text-sm text-ink-400">{t('c.empty')}</p>
+              )}
+            </div>
+
+            {/* ---------------------------------------------- attempts */}
+            <div>
+              <div className="mb-3 flex items-end justify-between gap-3">
+                <SectionTitle hint={t('smp.trialsHint')}>
+                  {t('smp.trials')}
+                </SectionTitle>
+                <button className="btn-ghost btn-sm" onClick={logTrial}>
+                  <Icon name="plus" size={14} />
+                  {t('smp.logTrial')}
+                </button>
+              </div>
+
+              {d.trials.length === 0 ? (
+                <p className="rounded-lg bg-ink-50 px-4 py-4 text-center text-sm text-ink-400">
+                  {t('smp.noTrials')}
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {d.trials.map((tr) => (
+                    <li
+                      key={tr.n}
+                      className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-ink-200 px-3 py-2 text-sm"
+                    >
+                      <span className="num font-semibold text-ink-700">
+                        {t('smp.trialNo', { n: tr.n })}
+                      </span>
+                      <span className="num text-xs text-ink-400">{tr.date}</span>
+                      {tr.resultHex && <Swatch hex={tr.resultHex} size={18} />}
+                      <span className="num text-xs text-ink-500">
+                        {num(sum(tr.dyes.map((x) => x.percent)), 3)} %
+                      </span>
+                      <span className="num text-xs text-ink-500">
+                        {num(tr.tempC, 0)} C / {num(tr.timeMin, 0)} min
+                      </span>
+                      {tr.matched && (
+                        <span className="ms-auto text-brand-600">
+                          <Icon name="check" size={15} />
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
 

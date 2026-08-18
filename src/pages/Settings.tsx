@@ -160,37 +160,42 @@ export default function SettingsPage() {
 
           <Card>
             <SectionTitle>{t('set.defaults')}</SectionTitle>
-            <Grid cols={3}>
-              <Field label={t('smp.acid')}>
+            <Grid cols={2}>
+              <Field label={t('set.acidGPerL')} hint={t('smp.acidHint')}>
                 <input
                   type="number"
-                  step="0.01"
+                  step="0.1"
                   className="input num"
-                  value={s.defaultAcid}
+                  value={s.acidGPerL}
+                  onChange={(e) => setSettings({ acidGPerL: toNum(e.target.value) })}
+                />
+              </Field>
+              <Field label={t('set.litresPerKg')}>
+                <input
+                  type="number"
+                  className="input num"
+                  value={s.litresPerKg}
+                  onChange={(e) => setSettings({ litresPerKg: toNum(e.target.value) })}
+                />
+              </Field>
+              <Field label={t('set.sampleFabricG')}>
+                <input
+                  type="number"
+                  step="0.1"
+                  className="input num"
+                  value={s.sampleFabricG}
                   onChange={(e) =>
-                    setSettings({ defaultAcid: toNum(e.target.value) })
+                    setSettings({ sampleFabricG: toNum(e.target.value) })
                   }
                 />
               </Field>
-              <Field label={t('smp.carrier')}>
+              <Field label={t('set.sampleWaterMl')}>
                 <input
                   type="number"
-                  step="0.01"
                   className="input num"
-                  value={s.defaultCarrier}
+                  value={s.sampleWaterMl}
                   onChange={(e) =>
-                    setSettings({ defaultCarrier: toNum(e.target.value) })
-                  }
-                />
-              </Field>
-              <Field label={t('smp.antiCrease')}>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="input num"
-                  value={s.defaultAntiCrease}
-                  onChange={(e) =>
-                    setSettings({ defaultAntiCrease: toNum(e.target.value) })
+                    setSettings({ sampleWaterMl: toNum(e.target.value) })
                   }
                 />
               </Field>

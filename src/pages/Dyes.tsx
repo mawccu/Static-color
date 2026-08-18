@@ -4,6 +4,7 @@ import { today, uid } from '../data/store'
 import type { Dye, DyeFamily } from '../data/types'
 import { num, useMoney, useT } from '../i18n'
 import {
+  Badge,
   Card,
   DeleteButton,
   Empty,
@@ -36,13 +37,32 @@ const blank = (): Dye => ({
   code: '',
   name: '',
   nameAr: '',
-  family: 'reactive',
+  family: 'disperse',
+  category: '',
   colorHex: '#3b82f6',
   supplier: '',
   costPerKg: 0,
   stockKg: 0,
+  hasBulk: false,
   notes: '',
 })
+
+/**
+ * Parses a pasted list. One dye per line, and where a line has commas they are
+ * read as name, category, supplier. Anything else is taken as a bare name,
+ * which is how most of the shelf will get entered.
+ */
+function parseDyeList(text: string): Pick<Dye, 'name' | 'category' | 'supplier'>[] {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [name, category = '', supplier = ''] = line.split(',').map((p) => p.trim())
+      return { name, category, supplier }
+    })
+    .filter((d) => d.name)
+}
 
 export default function Dyes() {
   const { db, add, update, remove } = useDb()
@@ -51,6 +71,8 @@ export default function Dyes() {
   const ed = useEditor<Dye>(blank)
   const [q, setQ] = useState('')
   const [family, setFamily] = useState<DyeFamily | 'all'>('all')
+  const [bulkOpen, setBulkOpen] = useState(false)
+  const [bulkText, setBulkText] = useState('')
 
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase()
@@ -59,12 +81,12 @@ export default function Dyes() {
       .filter((d) =>
         !needle
           ? true
-          : [d.code, d.name, d.nameAr, d.supplier]
+          : [d.code, d.name, d.nameAr, d.category, d.supplier]
               .join(' ')
               .toLowerCase()
               .includes(needle),
       )
-      .sort((a, b) => a.code.localeCompare(b.code))
+      .sort((a, b) => a.name.localeCompare(b.name))
   }, [db.dyes, q, family])
 
   const save = () => {
@@ -76,12 +98,26 @@ export default function Dyes() {
     ed.close()
   }
 
+  const parsed = useMemo(() => parseDyeList(bulkText), [bulkText])
+
+  const saveBulk = () => {
+    parsed.forEach((p) =>
+      add('dyes', { ...blank(), ...p, id: uid(), createdAt: today() }),
+    )
+    setBulkText('')
+    setBulkOpen(false)
+  }
+
   return (
     <>
       <PageHeader
         title={t('dye.title')}
         subtitle={t('dye.count', { n: db.dyes.length })}
       >
+        <button className="btn-ghost" onClick={() => setBulkOpen(true)}>
+          <Icon name="upload" size={16} />
+          {t('dye.bulkAdd')}
+        </button>
         <button className="btn-primary" onClick={ed.openNew}>
           <Icon name="plus" size={16} />
           {t('dye.new')}
@@ -115,9 +151,9 @@ export default function Dyes() {
               <thead>
                 <tr>
                   <th style={{ width: 46 }}></th>
-                  <th>{t('c.code')}</th>
                   <th>{t('c.name')}</th>
-                  <th>{t('dye.family')}</th>
+                  <th>{t('c.code')}</th>
+                  <th>{t('dye.category')}</th>
                   <th>{t('c.supplier')}</th>
                   <th className="text-end">{t('c.cost')}</th>
                   <th className="text-end">{t('c.stock')}</th>
@@ -130,17 +166,21 @@ export default function Dyes() {
                     <td>
                       <Swatch hex={d.colorHex} size={24} />
                     </td>
-                    <td className="num font-semibold">{d.code}</td>
-                    <td>{pick(d.name, d.nameAr)}</td>
+                    <td className="font-semibold">{pick(d.name, d.nameAr)}</td>
+                    <td className="num text-ink-500">{d.code || '-'}</td>
                     <td className="text-ink-500">
-                      {t(`family.${d.family}`)}
+                      {d.category || t(`family.${d.family}`)}
                     </td>
                     <td className="text-ink-500">{d.supplier || '-'}</td>
                     <td className="num text-end">{money(d.costPerKg)}</td>
                     <td className="num text-end">
-                      <span className={d.stockKg <= 0 ? 'text-red-600' : ''}>
-                        {num(d.stockKg)} {t('c.kg')}
-                      </span>
+                      {d.hasBulk ? (
+                        <span className={d.stockKg <= 0 ? 'text-amber-600' : ''}>
+                          {num(d.stockKg)} {t('c.kg')}
+                        </span>
+                      ) : (
+                        <Badge tone="gray">{t('dye.bottleOnly')}</Badge>
+                      )}
                     </td>
                     <td>
                       <div className="flex justify-end gap-1">
@@ -173,13 +213,35 @@ export default function Dyes() {
       >
         {ed.draft && (
           <div className="space-y-4">
+            <Field label={t('c.name')}>
+              <input
+                className="input"
+                value={ed.draft.name}
+                onChange={(e) => ed.set('name', e.target.value)}
+                placeholder="Dianix Blue S-BG"
+              />
+            </Field>
+
             <Grid cols={2}>
-              <Field label={t('c.code')}>
+              <Field label={t('c.nameAr')}>
+                <input
+                  className="input"
+                  value={ed.draft.nameAr}
+                  onChange={(e) => ed.set('nameAr', e.target.value)}
+                />
+              </Field>
+              <Field label={`${t('c.code')} (${t('smp.optional')})`}>
                 <input
                   className="input"
                   value={ed.draft.code}
                   onChange={(e) => ed.set('code', e.target.value)}
-                  placeholder="RB-19"
+                />
+              </Field>
+              <Field label={t('dye.category')}>
+                <input
+                  className="input"
+                  value={ed.draft.category}
+                  onChange={(e) => ed.set('category', e.target.value)}
                 />
               </Field>
               <Field label={t('dye.family')}>
@@ -195,21 +257,17 @@ export default function Dyes() {
                   ))}
                 </select>
               </Field>
-              <Field label={t('c.name')}>
-                <input
-                  className="input"
-                  value={ed.draft.name}
-                  onChange={(e) => ed.set('name', e.target.value)}
-                />
-              </Field>
-              <Field label={t('c.nameAr')}>
-                <input
-                  className="input"
-                  value={ed.draft.nameAr}
-                  onChange={(e) => ed.set('nameAr', e.target.value)}
-                />
-              </Field>
             </Grid>
+
+            <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-ink-700">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-brand-600"
+                checked={ed.draft.hasBulk}
+                onChange={(e) => ed.set('hasBulk', e.target.checked)}
+              />
+              {t('dye.hasBulk')}
+            </label>
 
             <Field label={t('dye.color')}>
               <div className="flex items-center gap-3">
@@ -264,6 +322,37 @@ export default function Dyes() {
             </Field>
           </div>
         )}
+      </Modal>
+
+      {/* ------------------------------------------------ bulk paste */}
+      <Modal
+        open={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        title={t('dye.bulkTitle')}
+        footer={
+          <>
+            <button className="btn-ghost" onClick={() => setBulkOpen(false)}>
+              {t('c.cancel')}
+            </button>
+            <button
+              className="btn-primary"
+              onClick={saveBulk}
+              disabled={parsed.length === 0}
+            >
+              {t('dye.bulkPreview', { n: parsed.length })}
+            </button>
+          </>
+        }
+      >
+        <Field hint={t('dye.bulkHint')}>
+          <textarea
+            className="input min-h-64 font-mono text-sm"
+            value={bulkText}
+            onChange={(e) => setBulkText(e.target.value)}
+            placeholder={'Dianix Blue S-BG, disperse, Dystar\nDianix Red CC\nTerasil Yellow W-4G'}
+            dir="ltr"
+          />
+        </Field>
       </Modal>
     </>
   )

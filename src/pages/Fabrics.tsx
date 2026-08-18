@@ -30,6 +30,10 @@ const blank = (): Fabric => ({
   metersPerKg: 0,
   yarnCount: 0,
   stockKg: 0,
+  defaultTempC: 130,
+  defaultTimeMin: 45,
+  litresPerKg: 10,
+  needsCarrier: false,
   notes: '',
 })
 
@@ -275,6 +279,45 @@ export default function Fabrics() {
                 />
               </Field>
             </Grid>
+
+            <div className="rounded-lg border border-ink-200 p-3">
+              <p className="label mb-3">{t('fab.defaults')}</p>
+              <Grid cols={3}>
+                <Field label={`${t('fab.defaultTemp')} (C)`}>
+                  <input
+                    type="number"
+                    className="input num"
+                    value={ed.draft.defaultTempC}
+                    onChange={(e) => ed.set('defaultTempC', toNum(e.target.value))}
+                  />
+                </Field>
+                <Field label={`${t('fab.defaultTime')} (${t('c.min')})`}>
+                  <input
+                    type="number"
+                    className="input num"
+                    value={ed.draft.defaultTimeMin}
+                    onChange={(e) => ed.set('defaultTimeMin', toNum(e.target.value))}
+                  />
+                </Field>
+                <Field label={t('fab.litresPerKg')}>
+                  <input
+                    type="number"
+                    className="input num"
+                    value={ed.draft.litresPerKg}
+                    onChange={(e) => ed.set('litresPerKg', toNum(e.target.value))}
+                  />
+                </Field>
+              </Grid>
+              <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm font-medium text-ink-700">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-brand-600"
+                  checked={ed.draft.needsCarrier}
+                  onChange={(e) => ed.set('needsCarrier', e.target.checked)}
+                />
+                {t('fab.needsCarrier')}
+              </label>
+            </div>
 
             <Field label={t('c.notes')}>
               <textarea

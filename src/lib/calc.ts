@@ -12,6 +12,13 @@ import type {
 } from '../data/types'
 import { isoDate } from '../data/store'
 
+/** Local number formatting, kept here so this module stays free of React. */
+const num = (v: number, dp = 2): string =>
+  (Number.isFinite(v) ? v : 0).toLocaleString('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: dp,
+  })
+
 export const sum = (ns: number[]): number => ns.reduce((a, b) => a + (b || 0), 0)
 
 /* ------------------------------------------------------------ documents */
@@ -147,40 +154,114 @@ export function jobCosting(
 export const owfGrams = (percent: number, fabricWeightG: number): number =>
   ((percent || 0) / 100) * (fabricWeightG || 0)
 
+/**
+ * Grams of dye for a full batch, written the way it is worked out on the
+ * calculator in the lab: percent on weight of fabric, times kilograms, times 10.
+ *
+ * A 2.2% shade on 46 kg is 2.2 x 46 x 10 = 1012 g. The 10 is the constant that
+ * turns a percentage of kilograms into grams, not the litres of water per kilo,
+ * even though both happen to be 10 here.
+ */
+export const owfBatchGrams = (percent: number, batchKg: number): number =>
+  (percent || 0) * (batchKg || 0) * 10
+
+/** Grams of a chemical dosed at a concentration in the bath. */
+export const gPerLGrams = (gPerL: number, litres: number): number =>
+  (gPerL || 0) * (litres || 0)
+
+export const mlToL = (ml: number): number => (ml || 0) / 1000
+
+/** Total water in the machine for a batch, litres. */
+export const batchLitres = (batchKg: number, litresPerKg: number): number =>
+  (batchKg || 0) * (litresPerKg || 0)
+
 export interface ScaledLine {
   label: string
   hex?: string
-  /** amount for the lab swatch, in grams */
+  /** what goes in the steel bottle, grams */
   lab: number
-  /** amount for the scaled batch, in grams */
+  /** what goes in the machine, grams */
   batch: number
+  /** how the amount was arrived at, shown so it can be checked by hand */
+  how: string
+}
+
+export interface ScaledRecipe {
+  /** litres of water in the machine */
+  litres: number
+  dyes: ScaledLine[]
+  chemicals: ScaledLine[]
+  totalDyeLab: number
+  totalDyeBatch: number
 }
 
 /**
- * Turns a 10 g lab recipe into the amounts needed for a real batch.
- * Everything scales linearly with fabric weight.
+ * Turns the lab sheet into the amounts to carry down to the machine.
+ *
+ * Dyes are on weight of fabric, so they scale with the kilograms.
+ * The acid is a concentration in the bath, so it scales with the litres of
+ * water instead. Those are two different rules and mixing them up is the
+ * mistake this function exists to prevent.
  */
 export function scaleRecipe(
   sample: Sample,
   batchKg: number,
+  litresPerKg: number,
   db: Pick<DB, 'dyes'>,
-): { factor: number; lines: ScaledLine[]; totalDyeLab: number } {
+): ScaledRecipe {
   const labG = sample.fabricWeightG || 10
-  const factor = (batchKg * 1000) / labG
-  const lines: ScaledLine[] = sample.dyes.map((d) => {
+  const labL = mlToL(sample.waterMl)
+  const litres = batchLitres(batchKg, litresPerKg)
+
+  const dyes: ScaledLine[] = sample.dyes.map((d) => {
     const dye = db.dyes.find((x) => x.id === d.dyeId)
-    const lab = d.grams || owfGrams(d.percent, labG)
+    const percent = d.percent || 0
     return {
-      label: dye ? `${dye.code} ${dye.name}` : '—',
+      label: dye ? [dye.code, dye.name].filter(Boolean).join(' ') : '-',
       hex: dye?.colorHex,
-      lab,
-      batch: lab * factor,
+      lab: d.grams || owfGrams(percent, labG),
+      batch: owfBatchGrams(percent, batchKg),
+      how: `${num(percent, 3)} x ${num(batchKg, 2)} x 10`,
     }
   })
+
+  const chem = (
+    label: string,
+    amount: number,
+    basis: 'gPerL' | 'owf',
+  ): ScaledLine => {
+    if (basis === 'owf') {
+      return {
+        label,
+        lab: owfGrams(amount, labG),
+        batch: owfBatchGrams(amount, batchKg),
+        how: `${num(amount, 3)} x ${num(batchKg, 2)} x 10`,
+      }
+    }
+    return {
+      label,
+      lab: gPerLGrams(amount, labL),
+      batch: gPerLGrams(amount, litres),
+      how: `${num(amount, 3)} g/L x ${num(litres, 1)} L`,
+    }
+  }
+
+  const chemicals: ScaledLine[] = [
+    chem('acid', sample.acidGPerL, 'gPerL'),
+    ...(sample.carrier > 0
+      ? [chem('carrier', sample.carrier, sample.carrierBasis)]
+      : []),
+    ...(sample.antiCrease > 0
+      ? [chem('antiCrease', sample.antiCrease, sample.antiCreaseBasis)]
+      : []),
+  ]
+
   return {
-    factor,
-    lines,
-    totalDyeLab: sum(lines.map((l) => l.lab)),
+    litres,
+    dyes,
+    chemicals,
+    totalDyeLab: sum(dyes.map((l) => l.lab)),
+    totalDyeBatch: sum(dyes.map((l) => l.batch)),
   }
 }
 

@@ -50,25 +50,30 @@ npx electron-builder --win -c.electronDist=node_modules/electron/dist
   day cost of every machine on the job`, then multiplied by days, plus manual
   amounts for dyes, chemicals and energy. Shows cost per kg, job value and
   margin live.
-- **Lab samples** - the recipe sheet. Cut weight (10 g by default), dye rows
-  entered as % on weight of fabric with grams calculated both ways, acid,
-  carrier, anti crease, water, machine, temperature and time. The 14 bench steps
-  are a checklist you tick off as you go. A scaling panel turns the lab recipe
-  into the amounts for a full production batch of any weight. Samples can be
-  repeated, which copies the recipe into a fresh sheet linked to the original.
+- **Lab samples** - the recipe sheet. A 10 g swatch in 250 ml of water, dye rows
+  entered as % on weight of fabric with grams calculated both ways, acid at a
+  concentration in the bath, carrier and anti break, machine, temperature and
+  time. Picking a fabric pulls its usual temperature and time, and warns when a
+  polyester needs carrier. The 14 bench steps are a checklist. The machine
+  hand-off panel turns the sheet into the amounts to carry down to the floor,
+  printing the working beside each line. A failed sample is adjusted in place and
+  each go is snapshotted into an attempts log.
 - **Quality** - neps and seed particles, yarn count, uniformity, hand feel and
   colour fastness, with a pass / hold / fail verdict.
 
 **Library** (the lists that everything else references)
 
-- **Dyes** - code, family, colour swatch, supplier, cost per kg, stock.
-- **Chemicals** - acid, carrier, anti crease and anything else.
+- **Dyes** - commercial name first, optional code, category, colour swatch,
+  supplier, cost per kg, and whether there is bulk or only a testing bottle.
+  A bulk paste importer takes a pasted list, one dye per line.
+- **Chemicals** - acid, carrier, anti break and anything else.
 - **Wash types** - code, machine size, temperature, duration, liquor ratio.
 - **Machines** - the 3 washers, dryer, press, ironing machine, boiler and
   samples machine are seeded on first open. Set a cost per day on each one,
   that is what drives job costing.
-- **Fabrics** - composition, GSM, width, yarn count, and the lab measurement of
-  how many meters one kilogram gives, with a kg to meters calculator.
+- **Fabrics** - composition, GSM, width, yarn count, the lab measurement of how
+  many meters one kilogram gives with a converter, plus the usual machine
+  temperature, time, litres of water per kilogram and whether it needs carrier.
 
 **Accounting**
 
@@ -119,28 +124,33 @@ code never touches Node directly. Only one instance can run at a time, so two
 windows can never fight over the data file. External links open in the real
 browser rather than inside the app.
 
-## Assumptions worth confirming
+## How the recipe maths works
 
-These were guessed while building and should be checked against how the workshop
-actually works:
+Two different rules, and mixing them up is the mistake the code exists to
+prevent:
 
-1. **Acid, carrier and anti crease scale linearly with fabric weight.** The
-   scaling panel multiplies them by the same factor as the dyes. If they are
-   actually dosed per litre of liquor rather than on weight of fabric, the
-   scaling for those three rows needs to change.
-2. **Dye amounts are entered as % on weight of fabric.** Grams are derived from
-   the swatch weight. Entering grams directly also works and back calculates the
-   percent.
-3. **Worker day rate is a single global number** in Settings, not per worker.
-4. **Tax defaults to 16%** on new invoices and estimates, changeable per
-   document and in Settings.
+- **Dyes scale with the fabric.** A percentage on weight of fabric becomes grams
+  by `percent x kilograms x 10`. A 2.2 percent shade on 46 kg is
+  `2.2 x 46 x 10 = 1012 g`. The machine hand-off panel prints that working next
+  to every line so it can be checked by hand.
+- **The acid scales with the water.** It is a concentration in the bath, 2 grams
+  per litre. A 250 ml lab bottle takes 0.5 g; 46 kg at 10 litres per kg is 460
+  litres and takes 920 g.
+
+Carrier and anti break each carry their own basis selector, because how they are
+dosed is not settled yet and the code should not guess.
+
+Sources for all of this are in `docs/workshop-answers.md`, which is the
+specification. Where the code and that file disagree, the file is right.
 
 ## Still to fill in
 
 - The 63 wash types
-- The dye library
+- The dye library, 3000 or so, via the bulk paste importer on the dyes screen
 - Real cost per day for each machine
 - Real fabric meters per kg measurements
+- Sessions 3 to 7 of the field guide, see the open questions in
+  `docs/workshop-answers.md`
 
 ## Stack
 

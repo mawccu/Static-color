@@ -28,9 +28,12 @@ export const defaultSettings: Settings = {
   lang: 'ar',
   workerDayRate: 20,
   taxPct: 16,
-  defaultAcid: 0.25,
-  defaultCarrier: 0.25,
-  defaultAntiCrease: 0.25,
+  acidGPerL: 2,
+  defaultCarrier: 0,
+  defaultAntiCrease: 0,
+  sampleFabricG: 10,
+  sampleWaterMl: 250,
+  litresPerKg: 10,
 }
 
 /**
@@ -111,14 +114,48 @@ export const emptyDB = (): DB => ({
   quality: [],
 })
 
-/** Fill in any collection added by a later version of the app. */
+const n = (v: unknown, fallback: number): number =>
+  typeof v === 'number' && Number.isFinite(v) ? v : fallback
+
+/**
+ * Fill in anything a later version of the app added, at collection level and
+ * at row level, so older saved data never surfaces as undefined or NaN.
+ */
 const migrate = (raw: Partial<DB>): DB => {
   const base = emptyDB()
-  return {
+  const db: DB = {
     ...base,
     ...raw,
     settings: { ...base.settings, ...(raw.settings ?? {}) },
   }
+
+  db.dyes = db.dyes.map((d) => ({
+    ...d,
+    category: d.category ?? '',
+    hasBulk: d.hasBulk ?? true,
+  }))
+
+  db.fabrics = db.fabrics.map((f) => ({
+    ...f,
+    defaultTempC: n(f.defaultTempC, 130),
+    defaultTimeMin: n(f.defaultTimeMin, 45),
+    litresPerKg: n(f.litresPerKg, db.settings.litresPerKg),
+    needsCarrier:
+      f.needsCarrier ?? /poly|بولي/i.test(f.composition ?? ''),
+  }))
+
+  // samples saved before the acid moved to grams per litre carried a bare
+  // `acid` number, which is not convertible, so those fall back to the default
+  db.samples = db.samples.map((s) => ({
+    ...s,
+    acidGPerL: n(s.acidGPerL, db.settings.acidGPerL),
+    waterMl: n(s.waterMl, db.settings.sampleWaterMl),
+    carrierBasis: s.carrierBasis ?? 'gPerL',
+    antiCreaseBasis: s.antiCreaseBasis ?? 'gPerL',
+    trials: s.trials ?? [],
+  }))
+
+  return db
 }
 
 /**

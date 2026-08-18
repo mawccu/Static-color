@@ -26,14 +26,23 @@ export type DyeFamily =
   | 'other'
 
 export interface Dye extends Base {
+  /** optional. Most dyes are known by their commercial name, not a code. */
   code: string
+  /** the commercial name, which is what gets written on the sample sheet */
   name: string
   nameAr: string
   family: DyeFamily
+  /** free text grouping the way the supplier catalogues it */
+  category: string
   colorHex: string
   supplier: string
   costPerKg: number
   stockKg: number
+  /**
+   * False when only a small testing bottle is on the shelf and the bulk has to
+   * be ordered in. Most of the 3000+ dyes are in this state.
+   */
+  hasBulk: boolean
   notes: string
 }
 
@@ -107,6 +116,13 @@ export interface Fabric extends Base {
   /** yarn count, higher = finer thread = better quality */
   yarnCount: number
   stockKg: number
+  /** the samples machine runs hotter or cooler depending on the fabric */
+  defaultTempC: number
+  defaultTimeMin: number
+  /** litres of water per kilogram of fabric in the machine. Normally 10, sometimes 20. */
+  litresPerKg: number
+  /** polyester needs carrier, cotton does not */
+  needsCarrier: boolean
   notes: string
 }
 
@@ -134,6 +150,30 @@ export interface SampleDye {
   grams: number
 }
 
+/**
+ * How a chemical is dosed.
+ * `gPerL` is grams per litre of water in the bath, which is how the acid works:
+ * 2 g/L, so 250 ml in the lab and 460 litres in the machine both follow the
+ * same rule. `owf` is percent on weight of fabric, the way the dyes are dosed.
+ */
+export type Basis = 'gPerL' | 'owf'
+
+/** One logged attempt at matching the target. A sample is adjusted, not replaced. */
+export interface SampleTrial {
+  n: number
+  date: string
+  dyes: SampleDye[]
+  acidGPerL: number
+  carrier: number
+  antiCrease: number
+  waterMl: number
+  tempC: number
+  timeMin: number
+  resultHex: string
+  matched: boolean
+  notes: string
+}
+
 export interface Sample extends Base {
   code: string
   date: string
@@ -144,11 +184,14 @@ export interface Sample extends Base {
   /** weight of the cut swatch, grams. Standard is 10 g. */
   fabricWeightG: number
   dyes: SampleDye[]
-  acid: number
+  /** acid concentration in the bath, grams per litre. Normally 2. */
+  acidGPerL: number
   carrier: number
+  carrierBasis: Basis
   antiCrease: number
+  antiCreaseBasis: Basis
+  /** water in the steel bottle, millilitres. Normally 250 for a 10 g swatch. */
   waterMl: number
-  liquorRatio: number
   machineId: Id | null
   tempC: number
   timeMin: number
@@ -157,6 +200,8 @@ export interface Sample extends Base {
   matched: boolean
   /** ids of the procedure steps ticked off */
   stepsDone: number[]
+  /** every attempt logged before the current one */
+  trials: SampleTrial[]
   repeatOf: Id | null
   notes: string
 }
@@ -305,10 +350,15 @@ export interface Settings {
   workerDayRate: number
   /** default tax percent used on new invoices */
   taxPct: number
-  /** default acid amount on a 10 g sample */
-  defaultAcid: number
+  /** acid concentration in the bath, grams per litre of water. Normally 2. */
+  acidGPerL: number
   defaultCarrier: number
   defaultAntiCrease: number
+  /** the standard lab swatch: 10 g of fabric in 250 ml of water */
+  sampleFabricG: number
+  sampleWaterMl: number
+  /** litres of water per kilogram of fabric in the machine. Normally 10. */
+  litresPerKg: number
 }
 
 /* ------------------------------------------------------------ database */
