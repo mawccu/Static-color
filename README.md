@@ -61,6 +61,19 @@ npx electron-builder --win -c.electronDist=node_modules/electron/dist
 - **Quality** - neps and seed particles, yarn count, uniformity, hand feel and
   colour fastness, with a pass / hold / fail verdict.
 
+**Recipe knowledge base**
+
+The lab sample sheet retrieves past work instead of leaving it on paper. Choose
+a fabric and a target shade and it lists the approved samples already run on
+that fabric, closest shade first, with a colour difference and a plain language
+band beside each one. **Start from this** copies that recipe onto the sheet as
+the opening point.
+
+The difference is computed in CIE Lab from the colour values stored in the app,
+which come from a picker on a screen. It is a way of ordering candidates, not a
+measurement. Without a spectrophotometer it must never be used to pass or fail a
+delivered batch, and the panel says so on screen.
+
 **Library** (the lists that everything else references)
 
 - **Dyes** - commercial name first, optional code, category, colour swatch,

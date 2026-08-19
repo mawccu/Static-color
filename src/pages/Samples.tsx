@@ -27,6 +27,14 @@ import {
   scaleRecipe,
   sum,
 } from '../lib/calc'
+import { deltaE, matchBand, type MatchBand } from '../lib/color'
+
+const bandTone: Record<MatchBand, 'green' | 'blue' | 'amber' | 'gray'> = {
+  exact: 'green',
+  close: 'blue',
+  near: 'amber',
+  far: 'gray',
+}
 
 const statuses: SampleStatus[] = ['draft', 'running', 'done', 'approved', 'rejected']
 
@@ -105,6 +113,7 @@ export default function Samples() {
   const money = useMoney()
   const [q, setQ] = useState('')
   const [status, setStatus] = useState<SampleStatus | 'all'>('all')
+  const [fabricFilter, setFabricFilter] = useState('')
   const [batchKg, setBatchKg] = useState(50)
 
   const blank = (): Sample => ({
@@ -143,6 +152,7 @@ export default function Samples() {
     const needle = q.trim().toLowerCase()
     return db.samples
       .filter((s) => (status === 'all' ? true : s.status === status))
+      .filter((s) => (fabricFilter ? s.fabricId === fabricFilter : true))
       .filter((s) => {
         if (!needle) return true
         const client = db.clients.find((c) => c.id === s.clientId)
@@ -156,7 +166,7 @@ export default function Samples() {
           .includes(needle)
       })
       .sort((a, b) => b.date.localeCompare(a.date) || b.code.localeCompare(a.code))
-  }, [db.samples, db.clients, db.dyes, q, status])
+  }, [db.samples, db.clients, db.dyes, q, status, fabricFilter])
 
   const save = () => {
     if (!ed.draft) return
@@ -242,6 +252,49 @@ export default function Samples() {
   const litresPerKg = sampleFabric?.litresPerKg || db.settings.litresPerKg
   const scaled = d ? scaleRecipe(d, batchKg, litresPerKg, db) : null
 
+  /**
+   * The recipe knowledge base, which is the thing that replaces searching
+   * through paper. Past approved samples on the same fabric, ranked by how
+   * close their result came to the shade being aimed at now. Plain colour
+   * arithmetic on the stored values, no measurement and no guessing.
+   */
+  const similar = useMemo(() => {
+    if (!d || !d.fabricId) return []
+    return db.samples
+      .filter(
+        (s) =>
+          s.id !== d.id &&
+          s.fabricId === d.fabricId &&
+          s.status === 'approved' &&
+          s.dyes.length > 0,
+      )
+      .map((s) => {
+        const shade = s.resultHex || s.targetHex
+        return { sample: s, shade, distance: deltaE(d.targetHex, shade) }
+      })
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, 5)
+  }, [d, db.samples])
+
+  /** Copies a past recipe onto the sheet as the starting point. */
+  const startFrom = (source: Sample) => {
+    if (!d) return
+    ed.setDraft({
+      ...d,
+      dyes: source.dyes.map((x) => ({ ...x })),
+      acid: source.acid,
+      acidBasis: source.acidBasis,
+      carrier: source.carrier,
+      carrierBasis: source.carrierBasis,
+      antiCrease: source.antiCrease,
+      antiCreaseBasis: source.antiCreaseBasis,
+      waterMl: source.waterMl,
+      tempC: source.tempC,
+      timeMin: source.timeMin,
+      notes: d.notes,
+    })
+  }
+
   /** Picking a fabric pulls its usual temperature, time and carrier need. */
   const pickFabric = (fabricId: string | null) => {
     if (!d) return
@@ -270,6 +323,18 @@ export default function Samples() {
           </div>
           <select
             className="input w-auto"
+            value={fabricFilter}
+            onChange={(e) => setFabricFilter(e.target.value)}
+          >
+            <option value="">{t('smp.anyFabric')}</option>
+            {db.fabrics.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.code} {pick(f.name, f.nameAr)}
+              </option>
+            ))}
+          </select>
+          <select
+            className="input w-auto"
             value={status}
             onChange={(e) => setStatus(e.target.value as SampleStatus | 'all')}
           >
@@ -280,6 +345,16 @@ export default function Samples() {
               </option>
             ))}
           </select>
+          <button
+            className={`btn btn-sm border ${
+              status === 'approved'
+                ? 'border-brand-500 bg-brand-50 text-brand-800'
+                : 'border-ink-200 bg-white text-ink-600'
+            }`}
+            onClick={() => setStatus(status === 'approved' ? 'all' : 'approved')}
+          >
+            {t('smp.onlyApproved')}
+          </button>
         </div>
 
         {rows.length === 0 ? (
@@ -292,6 +367,7 @@ export default function Samples() {
                   <th>{t('c.code')}</th>
                   <th>{t('c.date')}</th>
                   <th>{t('c.client')}</th>
+                  <th>{t('c.fabric')}</th>
                   <th>{t('smp.target')}</th>
                   <th>{t('smp.result')}</th>
                   <th className="text-end">{t('smp.totalDye')}</th>
@@ -310,6 +386,12 @@ export default function Samples() {
                       <td className="num font-semibold">{s.code}</td>
                       <td className="num text-ink-500">{s.date}</td>
                       <td>{client ? pick(client.name, client.nameAr) : '-'}</td>
+                      <td className="text-ink-500">
+                        {(() => {
+                          const f = db.fabrics.find((x) => x.id === s.fabricId)
+                          return f ? pick(f.name, f.nameAr) : '-'
+                        })()}
+                      </td>
                       <td>
                         <div className="flex items-center gap-2">
                           <Swatch hex={s.targetHex} size={22} />
@@ -482,6 +564,57 @@ export default function Samples() {
                   </label>
                 </div>
               </div>
+            </div>
+
+            {/* ------------------------------------- past recipes */}
+            <div className="rounded-xl border border-ink-200 bg-ink-50/60 p-4">
+              <SectionTitle hint={t('smp.similarHint')}>
+                {t('smp.similar')}
+              </SectionTitle>
+
+              {!d.fabricId ? (
+                <p className="text-sm text-ink-400">{t('smp.pickFabricFirst')}</p>
+              ) : similar.length === 0 ? (
+                <p className="text-sm text-ink-400">{t('smp.similarNone')}</p>
+              ) : (
+                <>
+                  <ul className="space-y-2">
+                    {similar.map(({ sample, shade, distance }) => {
+                      const band = matchBand(distance)
+                      return (
+                        <li
+                          key={sample.id}
+                          className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg bg-white px-3 py-2"
+                        >
+                          <div className="flex items-center gap-1">
+                            <Swatch hex={d.targetHex} size={20} />
+                            <Swatch hex={shade} size={20} />
+                          </div>
+                          <span className="num text-sm font-semibold">
+                            {sample.code}
+                          </span>
+                          <span className="truncate text-sm text-ink-500">
+                            {sample.targetName || '-'}
+                          </span>
+                          <Badge tone={bandTone[band]}>{t(`match.${band}`)}</Badge>
+                          <span className="num text-xs text-ink-400">
+                            {t('smp.distance')} {num(distance, 1)}
+                          </span>
+                          <button
+                            className="btn-ghost btn-sm ms-auto"
+                            onClick={() => startFrom(sample)}
+                          >
+                            {t('smp.useRecipe')}
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                  <p className="mt-2 text-xs text-ink-400">
+                    {t('smp.distanceHint')}
+                  </p>
+                </>
+              )}
             </div>
 
             {/* ----------------------------------------------- recipe */}

@@ -133,4 +133,8 @@ You adjust the same sample. You do not start a new one.
    that conversion is wrong.
 4. **Which fabrics need more water, and how much?** Each fabric carries its own
    figure, but they all still need filling in.
-5. Sessions 3 to 7 of the field guide.
+5. **Does the workshop have a spectrophotometer?** It decides whether a real
+   measured colour difference can ever be recorded, or whether the shade match
+   stays a human judgement. Everything in the vision document that talks about
+   delta E depends on the answer.
+6. Sessions 3 to 7 of the field guide.

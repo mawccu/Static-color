@@ -279,6 +279,33 @@ export const dict = {
   ],
   'smp.trialNo': ['Attempt {n}', 'محاولة {n}'],
   'smp.noTrials': ['No attempts logged yet', 'لم تُسجل محاولات بعد'],
+
+  /* recipe knowledge base */
+  'smp.similar': ['Recipes close to this colour', 'وصفات قريبة من هذا اللون'],
+  'smp.similarHint': [
+    'Approved samples on the same fabric, closest shade first',
+    'عينات معتمدة على القماش نفسه، الأقرب لوناً أولاً',
+  ],
+  'smp.similarNone': [
+    'Nothing approved on this fabric yet',
+    'لا توجد عينات معتمدة على هذا القماش بعد',
+  ],
+  'smp.pickFabricFirst': [
+    'Choose a fabric to see past recipes',
+    'اختر القماش لعرض الوصفات السابقة',
+  ],
+  'smp.useRecipe': ['Start from this', 'ابدأ من هذه'],
+  'smp.distance': ['Difference', 'الفرق'],
+  'smp.distanceHint': [
+    'Calculated from the saved colours on screen, not measured on a device',
+    'محسوب من الألوان المحفوظة على الشاشة، وليس مقاساً بجهاز',
+  ],
+  'match.exact': ['Same shade', 'نفس الدرجة'],
+  'match.close': ['Very close', 'قريب جداً'],
+  'match.near': ['In the range', 'ضمن المدى'],
+  'match.far': ['Different', 'مختلف'],
+  'smp.onlyApproved': ['Approved only', 'المعتمدة فقط'],
+  'smp.anyFabric': ['Any fabric', 'أي قماش'],
   'sstatus.draft': ['Draft', 'مسودة'],
   'sstatus.running': ['In machine', 'في الجهاز'],
   'sstatus.done': ['Done', 'منتهية'],
