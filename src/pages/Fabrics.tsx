@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useDb } from '../data/db'
 import { today, uid } from '../data/store'
-import type { Fabric } from '../data/types'
+import type { Fabric, WaterUnit } from '../data/types'
+import { litresPerKgToPercent, percentToLitresPerKg } from '../data/types'
 import { num, useT } from '../i18n'
 import {
   Card,
@@ -33,6 +34,7 @@ const blank = (): Fabric => ({
   defaultTempC: 130,
   defaultTimeMin: 45,
   litresPerKg: 10,
+  waterUnit: 'lPerKg',
   needsCarrier: false,
   notes: '',
 })
@@ -299,13 +301,43 @@ export default function Fabrics() {
                     onChange={(e) => ed.set('defaultTimeMin', toNum(e.target.value))}
                   />
                 </Field>
-                <Field label={t('fab.litresPerKg')}>
-                  <input
-                    type="number"
-                    className="input num"
-                    value={ed.draft.litresPerKg}
-                    onChange={(e) => ed.set('litresPerKg', toNum(e.target.value))}
-                  />
+                <Field
+                  label={t('fab.water')}
+                  hint={
+                    ed.draft.waterUnit === 'percent'
+                      ? `${num(ed.draft.litresPerKg, 2)} ${t('fab.litresPerKg')}`
+                      : `${num(litresPerKgToPercent(ed.draft.litresPerKg), 0)} %`
+                  }
+                >
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      step="0.1"
+                      className="input num w-20"
+                      value={
+                        ed.draft.waterUnit === 'percent'
+                          ? litresPerKgToPercent(ed.draft.litresPerKg)
+                          : ed.draft.litresPerKg
+                      }
+                      onChange={(e) => {
+                        const v = toNum(e.target.value)
+                        ed.set(
+                          'litresPerKg',
+                          ed.draft?.waterUnit === 'percent'
+                            ? percentToLitresPerKg(v)
+                            : v,
+                        )
+                      }}
+                    />
+                    <select
+                      className="input"
+                      value={ed.draft.waterUnit}
+                      onChange={(e) => ed.set('waterUnit', e.target.value as WaterUnit)}
+                    >
+                      <option value="lPerKg">{t('fab.unitLPerKg')}</option>
+                      <option value="percent">{t('fab.unitPercent')}</option>
+                    </select>
+                  </div>
                 </Field>
               </Grid>
               <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm font-medium text-ink-700">

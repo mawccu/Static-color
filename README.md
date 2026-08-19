@@ -133,12 +133,16 @@ prevent:
   by `percent x kilograms x 10`. A 2.2 percent shade on 46 kg is
   `2.2 x 46 x 10 = 1012 g`. The machine hand-off panel prints that working next
   to every line so it can be checked by hand.
-- **The acid scales with the water.** It is a concentration in the bath, 2 grams
-  per litre. A 250 ml lab bottle takes 0.5 g; 46 kg at 10 litres per kg is 460
-  litres and takes 920 g.
+- **A chemical follows whichever basis its row is set to.** Grams per litre
+  scales with the water: 2 g/L of acid is 0.5 g in a 250 ml lab bottle and 920 g
+  in a 460 litre machine. Percent on weight of fabric scales with the kilograms,
+  the same as a dye. Acid, carrier and anti break are each used both ways in the
+  workshop, so every one of them carries its own basis selector and the code
+  never assumes.
 
-Carrier and anti break each carry their own basis selector, because how they are
-dosed is not settled yet and the code should not guess.
+Water per kilogram of fabric varies by fabric, and can be typed either as litres
+per kilogram or as a percentage on weight of fabric. 10 litres per kilogram and
+1000 percent are the same bath.
 
 Sources for all of this are in `docs/workshop-answers.md`, which is the
 specification. Where the code and that file disagree, the file is right.

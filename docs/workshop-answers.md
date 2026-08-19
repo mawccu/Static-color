@@ -13,12 +13,17 @@ Question numbering follows the field guide.
 **1. What is the acid measured in?**
 2 grams per litre of water. Not on the weight of the fabric.
 
+*Later correction:* the acid, the carrier and the anti break **can all be
+percentages too**. Both ways are in use. So the basis is set per chemical on
+each sample sheet and the code never assumes one.
+
 **2. How does the acid scale from lab to machine?**
 By the water, not the fabric. 1000 litres in the machine takes 2 kg of acid. A
 250 ml lab bottle takes 0.5 g. He notes the concentration is on the high side.
 
 > This corrected the assumption flagged in the first build, which scaled the
-> acid with fabric weight. `Sample.acid` became `Sample.acidGPerL`.
+> acid with fabric weight. `Sample.acid` now travels with a `Sample.acidBasis`
+> so either rule can be selected.
 
 **3. How much water in the lab?**
 About 250 ml for a 10 gram swatch, and it is the same every time. You fill the
@@ -47,7 +52,13 @@ it is a 2.2 percent shade giving 1,012 g, which is an ordinary medium to dark
 navy. The percentage reading is the correct one, so the app keeps the `% o.w.f.`
 column and reproduces his formula verbatim in the machine hand-off panel.
 
-Sometimes 20 litres per kg is used instead of 10. Reason not known yet.
+Sometimes 20 litres per kg is used instead of 10.
+
+*Later correction:* the water depends on the fabric type, some fabrics need
+more, and it can be quoted as a percentage as well. That is the same number
+said two ways: 10 litres per kilogram of fabric is ten times the fabric's own
+weight in water, which is 1000% on weight of fabric. Each fabric now carries its
+own figure and can be typed in either unit.
 
 **5. When is carrier used?**
 Polyester only.
@@ -113,8 +124,13 @@ You adjust the same sample. You do not start a new one.
    uses a different concentration from the machine, or 0.25 meant something
    else. The app calculates 0.5 g and shows its working, so this is visible
    rather than hidden.
-2. **How are carrier and anti break dosed?** Grams per litre like the acid, or a
-   percentage on fabric? Each has a basis selector on the sample sheet so it can
-   be set correctly without the code assuming.
-3. **Why 20 litres per kg instead of 10 sometimes?** Set per fabric today.
-4. Sessions 3 to 7 of the field guide.
+2. **When is each chemical a percentage and when is it grams per litre?** Both
+   are confirmed to happen. What decides it is not known: the chemical, the
+   fabric, the process, or just habit. Until that is answered the basis is
+   chosen per sample.
+3. **Is a water percentage really on weight of fabric?** The app reads 1000% as
+   10 litres per kilogram. If the workshop means a percentage of something else,
+   that conversion is wrong.
+4. **Which fabrics need more water, and how much?** Each fabric carries its own
+   figure, but they all still need filling in.
+5. Sessions 3 to 7 of the field guide.

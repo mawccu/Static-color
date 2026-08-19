@@ -104,6 +104,16 @@ export interface WashType extends Base {
 
 /* -------------------------------------------------------------- fabric */
 
+/**
+ * Water can be quoted two ways for the same bath. 10 litres per kilogram of
+ * fabric is ten times the fabric's own weight in water, which written as a
+ * percentage on weight of fabric is 1000%. One number, two habits of speech.
+ */
+export type WaterUnit = 'lPerKg' | 'percent'
+
+export const litresPerKgToPercent = (lPerKg: number): number => (lPerKg || 0) * 100
+export const percentToLitresPerKg = (percent: number): number => (percent || 0) / 100
+
 export interface Fabric extends Base {
   code: string
   name: string
@@ -119,8 +129,13 @@ export interface Fabric extends Base {
   /** the samples machine runs hotter or cooler depending on the fabric */
   defaultTempC: number
   defaultTimeMin: number
-  /** litres of water per kilogram of fabric in the machine. Normally 10, sometimes 20. */
+  /**
+   * Litres of water per kilogram of fabric in the machine. Normally 10, but it
+   * varies by fabric because some need more water. Held in litres per kilogram
+   * whichever way it was typed in; `waterUnit` only decides how it is shown.
+   */
   litresPerKg: number
+  waterUnit: WaterUnit
   /** polyester needs carrier, cotton does not */
   needsCarrier: boolean
   notes: string
@@ -151,10 +166,12 @@ export interface SampleDye {
 }
 
 /**
- * How a chemical is dosed.
- * `gPerL` is grams per litre of water in the bath, which is how the acid works:
- * 2 g/L, so 250 ml in the lab and 460 litres in the machine both follow the
- * same rule. `owf` is percent on weight of fabric, the way the dyes are dosed.
+ * How a chemical is dosed. Both are in use in the workshop and which one
+ * applies is set per chemical, per sample, never assumed by the code.
+ *
+ * `gPerL` is grams per litre of water in the bath: 2 g/L of acid means 0.5 g in
+ * a 250 ml lab bottle and 920 g in a 460 litre machine.
+ * `owf` is percent on weight of fabric, the same rule the dyes follow.
  */
 export type Basis = 'gPerL' | 'owf'
 
@@ -163,7 +180,8 @@ export interface SampleTrial {
   n: number
   date: string
   dyes: SampleDye[]
-  acidGPerL: number
+  acid: number
+  acidBasis: Basis
   carrier: number
   antiCrease: number
   waterMl: number
@@ -184,8 +202,9 @@ export interface Sample extends Base {
   /** weight of the cut swatch, grams. Standard is 10 g. */
   fabricWeightG: number
   dyes: SampleDye[]
-  /** acid concentration in the bath, grams per litre. Normally 2. */
-  acidGPerL: number
+  /** acid amount, read against `acidBasis`. Normally 2 g per litre of water. */
+  acid: number
+  acidBasis: Basis
   carrier: number
   carrierBasis: Basis
   antiCrease: number
@@ -350,8 +369,9 @@ export interface Settings {
   workerDayRate: number
   /** default tax percent used on new invoices */
   taxPct: number
-  /** acid concentration in the bath, grams per litre of water. Normally 2. */
-  acidGPerL: number
+  /** default acid amount and how it is read. Normally 2 grams per litre. */
+  acidAmount: number
+  acidBasis: Basis
   defaultCarrier: number
   defaultAntiCrease: number
   /** the standard lab swatch: 10 g of fabric in 250 ml of water */

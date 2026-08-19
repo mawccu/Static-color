@@ -199,9 +199,10 @@ export interface ScaledRecipe {
  * Turns the lab sheet into the amounts to carry down to the machine.
  *
  * Dyes are on weight of fabric, so they scale with the kilograms.
- * The acid is a concentration in the bath, so it scales with the litres of
- * water instead. Those are two different rules and mixing them up is the
- * mistake this function exists to prevent.
+ * A chemical follows whichever basis its row is set to: on weight of fabric it
+ * scales with the kilograms too, as grams per litre it scales with the litres
+ * of water instead. Those are different rules and mixing them up is the mistake
+ * this function exists to prevent, so the basis is never assumed here.
  */
 export function scaleRecipe(
   sample: Sample,
@@ -247,7 +248,7 @@ export function scaleRecipe(
   }
 
   const chemicals: ScaledLine[] = [
-    chem('acid', sample.acidGPerL, 'gPerL'),
+    chem('acid', sample.acid, sample.acidBasis),
     ...(sample.carrier > 0
       ? [chem('carrier', sample.carrier, sample.carrierBasis)]
       : []),

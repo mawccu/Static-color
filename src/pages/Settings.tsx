@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { useDb } from '../data/db'
 import { desktop } from '../data/desktop'
 import { isoDate } from '../data/store'
-import type { DB, Lang } from '../data/types'
+import type { Basis, DB, Lang } from '../data/types'
 import { useT } from '../i18n'
 import { Card, Field, Grid, Icon, PageHeader, SectionTitle } from '../ui'
 import { toNum } from '../ui/useEditor'
@@ -161,16 +161,26 @@ export default function SettingsPage() {
           <Card>
             <SectionTitle>{t('set.defaults')}</SectionTitle>
             <Grid cols={2}>
-              <Field label={t('set.acidGPerL')} hint={t('smp.acidHint')}>
-                <input
-                  type="number"
-                  step="0.1"
-                  className="input num"
-                  value={s.acidGPerL}
-                  onChange={(e) => setSettings({ acidGPerL: toNum(e.target.value) })}
-                />
+              <Field label={t('set.acidAmount')} hint={t('smp.acidHint')}>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    step="0.1"
+                    className="input num w-20"
+                    value={s.acidAmount}
+                    onChange={(e) => setSettings({ acidAmount: toNum(e.target.value) })}
+                  />
+                  <select
+                    className="input"
+                    value={s.acidBasis}
+                    onChange={(e) => setSettings({ acidBasis: e.target.value as Basis })}
+                  >
+                    <option value="gPerL">{t('basis.gPerL')}</option>
+                    <option value="owf">{t('basis.owf')}</option>
+                  </select>
+                </div>
               </Field>
-              <Field label={t('set.litresPerKg')}>
+              <Field label={t('set.litresPerKg')} hint={t('set.litresPerKgHint')}>
                 <input
                   type="number"
                   className="input num"

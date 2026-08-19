@@ -41,15 +41,18 @@ const statusTone: Record<SampleStatus, 'gray' | 'blue' | 'green' | 'red' | 'ambe
 const STEP_COUNT = 14
 
 /**
- * An optional chemical. Carrier and anti break are both used "when needed"
- * rather than to a fixed rule, and how they are dosed is not settled yet, so
- * the basis is a choice on the row instead of an assumption in the code.
+ * One chemical on the sheet. Every one of them can be dosed either as grams per
+ * litre of the bath or as a percentage on weight of fabric, and which applies
+ * varies, so the basis is always a choice on the row and never an assumption in
+ * the code. The grams that result are shown beside it either way.
  */
 function ChemRow({
   label,
   hint,
   amount,
   basis,
+  labG,
+  labMl,
   onAmount,
   onBasis,
 }: {
@@ -57,25 +60,30 @@ function ChemRow({
   hint: string
   amount: number
   basis: Basis
+  labG: number
+  labMl: number
   onAmount: (v: number) => void
   onBasis: (v: Basis) => void
 }) {
   const { t } = useT()
+  const grams =
+    basis === 'owf' ? owfGrams(amount, labG) : gPerLGrams(amount, mlToL(labMl))
+
   return (
     <div className="rounded-lg border border-ink-200 p-3">
       <p className="label mb-2">
         {label} <span className="font-normal text-ink-400">/ {hint}</span>
       </p>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <input
           type="number"
           step="0.01"
-          className="input num w-24"
+          className="input num w-20"
           value={amount}
           onChange={(e) => onAmount(toNum(e.target.value))}
         />
         <select
-          className="input"
+          className="input flex-1"
           value={basis}
           onChange={(e) => onBasis(e.target.value as Basis)}
           aria-label={t('smp.basis')}
@@ -83,6 +91,9 @@ function ChemRow({
           <option value="gPerL">{t('basis.gPerL')}</option>
           <option value="owf">{t('basis.owf')}</option>
         </select>
+        <span className="num shrink-0 rounded-lg bg-brand-50 px-2.5 py-2 text-sm font-semibold text-brand-800">
+          {num(grams, 3)} g
+        </span>
       </div>
     </div>
   )
@@ -107,7 +118,8 @@ export default function Samples() {
     targetHex: '#8b5cf6',
     fabricWeightG: db.settings.sampleFabricG,
     dyes: [],
-    acidGPerL: db.settings.acidGPerL,
+    acid: db.settings.acidAmount,
+    acidBasis: db.settings.acidBasis,
     carrier: 0,
     carrierBasis: 'gPerL',
     antiCrease: 0,
@@ -185,7 +197,8 @@ export default function Samples() {
         n: d.trials.length + 1,
         date: today(),
         dyes: d.dyes.map((x) => ({ ...x })),
-        acidGPerL: d.acidGPerL,
+        acid: d.acid,
+        acidBasis: d.acidBasis,
         carrier: d.carrier,
         antiCrease: d.antiCrease,
         waterMl: d.waterMl,
@@ -591,33 +604,14 @@ export default function Samples() {
             <div>
               <SectionTitle>{t('smp.chemicals')}</SectionTitle>
 
-              <Grid cols={2}>
-                <Field label={`${t('smp.water')} (${t('c.ml')})`}>
-                  <input
-                    type="number"
-                    className="input num"
-                    value={d.waterMl}
-                    onChange={(e) => ed.set('waterMl', toNum(e.target.value))}
-                  />
-                </Field>
-                <Field
-                  label={`${t('smp.acid')} (g/L)`}
-                  hint={t('smp.acidHint')}
-                >
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      step="0.1"
-                      className="input num"
-                      value={d.acidGPerL}
-                      onChange={(e) => ed.set('acidGPerL', toNum(e.target.value))}
-                    />
-                    <span className="num shrink-0 rounded-lg bg-brand-50 px-2.5 py-2 text-sm font-semibold text-brand-800">
-                      {num(gPerLGrams(d.acidGPerL, mlToL(d.waterMl)), 3)} g
-                    </span>
-                  </div>
-                </Field>
-              </Grid>
+              <Field label={`${t('smp.water')} (${t('c.ml')})`} className="max-w-48">
+                <input
+                  type="number"
+                  className="input num"
+                  value={d.waterMl}
+                  onChange={(e) => ed.set('waterMl', toNum(e.target.value))}
+                />
+              </Field>
 
               {sampleFabric?.needsCarrier && d.carrier <= 0 && (
                 <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
@@ -625,12 +619,24 @@ export default function Samples() {
                 </p>
               )}
 
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div className="mt-3 grid gap-3 lg:grid-cols-3">
+                <ChemRow
+                  label={t('smp.acid')}
+                  hint={t('smp.acidHint')}
+                  amount={d.acid}
+                  basis={d.acidBasis}
+                  labG={d.fabricWeightG}
+                  labMl={d.waterMl}
+                  onAmount={(v) => ed.set('acid', v)}
+                  onBasis={(v) => ed.set('acidBasis', v)}
+                />
                 <ChemRow
                   label={t('smp.carrier')}
                   hint={t('smp.carrierHint')}
                   amount={d.carrier}
                   basis={d.carrierBasis}
+                  labG={d.fabricWeightG}
+                  labMl={d.waterMl}
                   onAmount={(v) => ed.set('carrier', v)}
                   onBasis={(v) => ed.set('carrierBasis', v)}
                 />
@@ -639,6 +645,8 @@ export default function Samples() {
                   hint={t('smp.antiCreaseHint')}
                   amount={d.antiCrease}
                   basis={d.antiCreaseBasis}
+                  labG={d.fabricWeightG}
+                  labMl={d.waterMl}
                   onAmount={(v) => ed.set('antiCrease', v)}
                   onBasis={(v) => ed.set('antiCreaseBasis', v)}
                 />

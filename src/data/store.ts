@@ -28,7 +28,8 @@ export const defaultSettings: Settings = {
   lang: 'ar',
   workerDayRate: 20,
   taxPct: 16,
-  acidGPerL: 2,
+  acidAmount: 2,
+  acidBasis: 'gPerL',
   defaultCarrier: 0,
   defaultAntiCrease: 0,
   sampleFabricG: 10,
@@ -94,7 +95,7 @@ const seedChemicals = (): DB['chemicals'] => {
   return [
     mk('ACD', 'Acid', 'حامض', 'acid'),
     mk('CAR', 'Carrier', 'كاريير', 'carrier'),
-    mk('ANT', 'Anti crease', 'مضاد التجعد', 'antiCrease'),
+    mk('ANT', 'Anti break', 'مضاد تكسر', 'antiCrease'),
   ]
 }
 
@@ -140,20 +141,28 @@ const migrate = (raw: Partial<DB>): DB => {
     defaultTempC: n(f.defaultTempC, 130),
     defaultTimeMin: n(f.defaultTimeMin, 45),
     litresPerKg: n(f.litresPerKg, db.settings.litresPerKg),
+    waterUnit: f.waterUnit ?? 'lPerKg',
     needsCarrier:
       f.needsCarrier ?? /poly|بولي/i.test(f.composition ?? ''),
   }))
 
-  // samples saved before the acid moved to grams per litre carried a bare
-  // `acid` number, which is not convertible, so those fall back to the default
-  db.samples = db.samples.map((s) => ({
-    ...s,
-    acidGPerL: n(s.acidGPerL, db.settings.acidGPerL),
-    waterMl: n(s.waterMl, db.settings.sampleWaterMl),
-    carrierBasis: s.carrierBasis ?? 'gPerL',
-    antiCreaseBasis: s.antiCreaseBasis ?? 'gPerL',
-    trials: s.trials ?? [],
-  }))
+  // the acid field has been through two shapes; carry whichever is present
+  db.samples = db.samples.map((s) => {
+    const prev = s as unknown as { acidGPerL?: number }
+    return {
+      ...s,
+      acid: n(s.acid, n(prev.acidGPerL, db.settings.acidAmount)),
+      acidBasis: s.acidBasis ?? db.settings.acidBasis,
+      waterMl: n(s.waterMl, db.settings.sampleWaterMl),
+      carrierBasis: s.carrierBasis ?? 'gPerL',
+      antiCreaseBasis: s.antiCreaseBasis ?? 'gPerL',
+      trials: (s.trials ?? []).map((tr) => ({
+        ...tr,
+        acid: n(tr.acid, 0),
+        acidBasis: tr.acidBasis ?? 'gPerL',
+      })),
+    }
+  })
 
   return db
 }
